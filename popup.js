@@ -1,13 +1,11 @@
-const GEMINI_API_KEY = "AIzaSyDwVpvo9dl847OtQbHu_ZEfk_wDLuLOBXA"; 
+const GEMINI_API_KEY = ""; 
 
 
 document.addEventListener("DOMContentLoaded", () => {
     console.log("Popup.js loaded");
 
     const eventDetailsDiv = document.getElementById("eventDetails");
-    const loadingDiv = document.getElementById("loading"); // Get the loader
-
-    // Show loader initially
+    const loadingDiv = document.getElementById("loading"); 
     loadingDiv.style.display = "block";
     eventDetailsDiv.style.display = "none";
 
@@ -21,11 +19,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 let eventObject = parseEventDetails(extractedText);
                 console.log("Parsed Event Object:", eventObject);
-
-                // Find missing fields
                 let missingFields = Object.keys(eventObject).filter(key => !eventObject[key]);
 
-                // Hide loader when data is ready
+
                 loadingDiv.style.display = "none";
                 eventDetailsDiv.style.display = "block";
 
@@ -49,17 +45,14 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    // Function to resize popup dynamically
     function resizePopup() {
-        let width = 420; // Adjust width as needed
-        let height = Math.max(document.body.scrollHeight, 300); // Minimum height 300px
+        let width = 420; 
+        let height = Math.max(document.body.scrollHeight, 300); 
 
         chrome.runtime.getPlatformInfo(() => {
             window.resizeTo(width, height);
         });
     }
-
-    // Resize popup after content loads
     setTimeout(resizePopup, 100);
 });
 
@@ -113,17 +106,14 @@ async function fetchEventDetails(selectedText) {
 }
 
 // 📌 Function to parse event details using regex
-// 📌 Function to parse event details using regex
 function parseEventDetails(text) {
     const extractValue = (regex) => {
         const match = text.match(regex);
-        return match ? match[1] : ""; // Return empty if no match
+        return match ? match[1] : "";
     };
 
     let startTime = extractValue(/Start Time:\s*(\d{2}:\d{2})/);
     let endTime = extractValue(/End Time:\s*(\d{2}:\d{2})/);
-
-    // Treat "00:00" as missing by setting it to an empty string
     startTime = (startTime === "00:00") ? "" : startTime;
     endTime = (endTime === "00:00") ? "" : endTime;
 
@@ -178,7 +168,7 @@ async function askMissingDetails(missingFields) {
         }
 
         let mcqText = result.candidates[0].content.parts[0].text.trim();
-        mcqText = mcqText.replace(/```json|```/g, "").trim(); // Remove JSON formatting
+        mcqText = mcqText.replace(/```json|```/g, "").trim();
 
         return JSON.parse(mcqText);
     } catch (error) {
@@ -195,8 +185,6 @@ function handleUserInput(field, value, div, question, eventObject) {
         checkAllFieldsFilled(eventObject);
         return;
     }
-
-    // Create an input field for custom input
     const input = document.createElement("input");
     input.type = "text";
     input.placeholder = `Enter ${field} (HH:MM AM/PM)...`;
@@ -204,15 +192,11 @@ function handleUserInput(field, value, div, question, eventObject) {
 
     input.addEventListener("blur", () => {
         let userInput = input.value.trim();
-
-        // Ensure required fields are not empty
         if (!userInput) {
             alert(`Please enter a valid ${field}.`);
             input.focus();
             return;
         }
-
-        // Validate time format and infer AM/PM if needed
         let referenceTime = field === "startTime" ? eventObject.endTime : eventObject.startTime;
         let validTime = validateAndFormatTime(userInput, field === "endTime", referenceTime);
 
@@ -228,7 +212,7 @@ function handleUserInput(field, value, div, question, eventObject) {
     });
 
     input.addEventListener("keypress", (e) => {
-        if (e.key === "Enter") input.blur(); // Save input when pressing Enter
+        if (e.key === "Enter") input.blur(); 
     });
 
     div.replaceChildren(input);
@@ -248,19 +232,17 @@ function validateAndFormatTime(input, isEndTime, otherTime) {
     if (!match) return null; // Invalid input
 
     let hours = parseInt(match[1], 10);
-    let minutes = match[2] ? parseInt(match[2], 10) : 0; // Default minutes to 00
-    let period = match[3]; // AM or PM (if provided)
+    let minutes = match[2] ? parseInt(match[2], 10) : 0;
+    let period = match[3]; 
 
-    // Validate time range
     if (hours < 1 || hours > 12 || minutes < 0 || minutes > 59) return null;
 
-    // If no AM/PM given, infer based on otherTime
     if (!period) {
         if (otherTime) {
             let otherHours = parseInt(otherTime.split(":")[0], 10);
-            period = otherHours >= 12 ? "pm" : "am"; // Match the other time
+            period = otherHours >= 12 ? "pm" : "am";
         } else {
-            period = hours < 7 ? "am" : "pm"; // Default to PM if afternoon
+            period = hours < 7 ? "am" : "pm"; 
         }
     }
 
@@ -268,7 +250,6 @@ function validateAndFormatTime(input, isEndTime, otherTime) {
     if (period === "pm" && hours !== 12) hours += 12;
     if (period === "am" && hours === 12) hours = 0;
 
-    // Format as HH:MM
     return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
 }
 
@@ -281,7 +262,6 @@ function handleUserInput(field, value, div, question, eventObject) {
         return;
     }
 
-    // Create an input field for custom input
     const input = document.createElement("input");
     input.type = "text";
     input.placeholder = `Enter ${field} (HH:MM AM/PM)...`;
@@ -291,13 +271,11 @@ function handleUserInput(field, value, div, question, eventObject) {
         if (e.key === "Enter") {
             let userInput = input.value.trim();
 
-            // Ensure input is not empty
             if (!userInput) {
                 alert(`Please enter a valid ${field}.`);
                 return;
             }
 
-            // Validate time format and infer AM/PM if needed
             let referenceTime = field === "startTime" ? eventObject.endTime : eventObject.startTime;
             let validTime = validateAndFormatTime(userInput, field === "endTime", referenceTime);
 
@@ -336,7 +314,6 @@ function displayMCQs(mcqs, eventObject) {
             div.appendChild(button);
         });
 
-        // Ensure "Other" option is always available
         if (!mcq.options.includes("Other")) {
             const otherButton = document.createElement("button");
             otherButton.innerText = "Other";
