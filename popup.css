@@ -1,0 +1,97 @@
+/* General Styling */
+body {
+    font-family: 'Poppins', sans-serif;
+    width: 350px;
+    padding: 15px;
+    background-color: #f0f5ff; /* Light blue background */
+    text-align: center;
+}
+
+/* Container */
+.container {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+    border: 2px solid #007bff; /* Primary blue */
+}
+
+/* Headings */
+h2 {
+    color: #007bff;
+    font-size: 20px;
+    margin-bottom: 12px;
+}
+
+/* Event Details */
+#eventDetails {
+    margin-top: 10px;
+    text-align: left;
+    font-size: 14px;
+    color: #333;
+}
+
+/* Buttons & Input Styling */
+.option-button, .option-input {
+    display: inline-block;
+    padding: 10px;
+    margin: 5px;
+    border: 1px solid #007bff;
+    background-color: #e3f2fd; /* Light blue */
+    color: #007bff;
+    cursor: pointer;
+    font-size: 14px;
+    border-radius: 5px;
+    transition: 0.3s ease-in-out;
+    text-align: center;
+    min-width: 120px;
+}
+
+.option-button:hover {
+    background-color: #007bff;
+    color: white;
+}
+
+/* Input field appears like a button until clicked */
+.option-input {
+    border: 1px solid #007bff;
+    outline: none;
+    width: auto;
+    text-align: center;
+    cursor: text;
+    background-color: white;
+    color: #007bff;
+}
+
+.option-input:focus {
+    border-color: #0056b3;
+    background-color: #f0faff;
+}
+
+/* Question Styling */
+.question {
+    font-weight: bold;
+    margin-top: 12px;
+    color: #0056b3;
+}
+
+/* Styling for the Other Input Field */
+.hidden-input {
+    display: none;
+    width: 90%;
+    padding: 8px;
+    margin-top: 5px;
+    border: 1px solid #007bff;
+    border-radius: 5px;
+    font-size: 14px;
+}
+
+/* Animated Fade-in Effect */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.container, .option-button, .option-input {
+    animation: fadeIn 0.3s ease-in-out;
+}
