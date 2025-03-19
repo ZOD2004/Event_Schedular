@@ -48,7 +48,21 @@ document.addEventListener("DOMContentLoaded", () => {
             eventDetailsDiv.innerText = "No event details found.";
         }
     });
+
+    // Function to resize popup dynamically
+    function resizePopup() {
+        let width = 420; // Adjust width as needed
+        let height = Math.max(document.body.scrollHeight, 300); // Minimum height 300px
+
+        chrome.runtime.getPlatformInfo(() => {
+            window.resizeTo(width, height);
+        });
+    }
+
+    // Resize popup after content loads
+    setTimeout(resizePopup, 100);
 });
+
 
 
 // 📌 Function to fetch event details using Gemini API
@@ -60,7 +74,7 @@ async function fetchEventDetails(selectedText) {
             body: JSON.stringify({
                 contents: [{
                     parts: [{
-                        text: `Extract event details from this text:
+                        text: `Extract event details from this text and keep the time in 24 hours format. Make a title which is suitable and short:
                         """${selectedText}"""
 
                         Expected format:
@@ -99,16 +113,31 @@ async function fetchEventDetails(selectedText) {
 }
 
 // 📌 Function to parse event details using regex
+// 📌 Function to parse event details using regex
 function parseEventDetails(text) {
+    const extractValue = (regex) => {
+        const match = text.match(regex);
+        return match ? match[1] : ""; // Return empty if no match
+    };
+
+    let startTime = extractValue(/Start Time:\s*(\d{2}:\d{2})/);
+    let endTime = extractValue(/End Time:\s*(\d{2}:\d{2})/);
+
+    // Treat "00:00" as missing by setting it to an empty string
+    startTime = (startTime === "00:00") ? "" : startTime;
+    endTime = (endTime === "00:00") ? "" : endTime;
+
     return {
-        title: text.match(/Title:\s*(.*)/)?.[1] || "",
-        date: text.match(/Date:\s*(\d{4}-\d{2}-\d{2})/)?.[1] || "",
-        startTime: text.match(/Start Time:\s*(\d{2}:\d{2})/)?.[1] || "",
-        endTime: text.match(/End Time:\s*(\d{2}:\d{2}|)/)?.[1] || "",
-        location: text.match(/Location:\s*(.*)/)?.[1] || "",
-        description: text.match(/Description:\s*(.*)/)?.[1] || ""
+        title: extractValue(/Title:\s*(.*)/),
+        date: extractValue(/Date:\s*(\d{4}-\d{2}-\d{2})/),
+        startTime: startTime,
+        endTime: endTime,
+        location: extractValue(/Location:\s*(.*)/),
+        description: extractValue(/Description:\s*(.*)/)
     };
 }
+
+
 
 // 📌 Function to ask missing details via MCQs
 async function askMissingDetails(missingFields) {
@@ -158,8 +187,139 @@ async function askMissingDetails(missingFields) {
     }
 }
 
-// 📌 Function to display MCQs and allow user input
-// 📌 Function to display MCQs and allow user input
+// 📌 Function to handle user input with validation
+function handleUserInput(field, value, div, question, eventObject) {
+    if (value !== "Other") {
+        eventObject[field] = value;
+        div.innerHTML = `<p><strong>${question}</strong> ${eventObject[field]}</p>`;
+        checkAllFieldsFilled(eventObject);
+        return;
+    }
+
+    // Create an input field for custom input
+    const input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = `Enter ${field} (HH:MM AM/PM)...`;
+    input.classList.add("option-input");
+
+    input.addEventListener("blur", () => {
+        let userInput = input.value.trim();
+
+        // Ensure required fields are not empty
+        if (!userInput) {
+            alert(`Please enter a valid ${field}.`);
+            input.focus();
+            return;
+        }
+
+        // Validate time format and infer AM/PM if needed
+        let referenceTime = field === "startTime" ? eventObject.endTime : eventObject.startTime;
+        let validTime = validateAndFormatTime(userInput, field === "endTime", referenceTime);
+
+        if (!validTime) {
+            alert("Invalid time format. Please enter time in HH:MM AM/PM.");
+            input.focus();
+            return;
+        }
+
+        eventObject[field] = validTime;
+        div.innerHTML = `<p><strong>${question}</strong> ${eventObject[field]}</p>`;
+        checkAllFieldsFilled(eventObject);
+    });
+
+    input.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") input.blur(); // Save input when pressing Enter
+    });
+
+    div.replaceChildren(input);
+    input.focus();
+}
+
+
+
+// 📌 Function to validate and auto-correct time input with AM/PM detection
+// 📌 Function to validate and auto-correct time input with AM/PM detection
+function validateAndFormatTime(input, isEndTime, otherTime) {
+    input = input.trim().toLowerCase();
+
+    const timeRegex = /^(\d{1,2})(?::(\d{1,2}))?\s*(am|pm)?$/;
+    const match = input.match(timeRegex);
+
+    if (!match) return null; // Invalid input
+
+    let hours = parseInt(match[1], 10);
+    let minutes = match[2] ? parseInt(match[2], 10) : 0; // Default minutes to 00
+    let period = match[3]; // AM or PM (if provided)
+
+    // Validate time range
+    if (hours < 1 || hours > 12 || minutes < 0 || minutes > 59) return null;
+
+    // If no AM/PM given, infer based on otherTime
+    if (!period) {
+        if (otherTime) {
+            let otherHours = parseInt(otherTime.split(":")[0], 10);
+            period = otherHours >= 12 ? "pm" : "am"; // Match the other time
+        } else {
+            period = hours < 7 ? "am" : "pm"; // Default to PM if afternoon
+        }
+    }
+
+    // Convert to 24-hour format
+    if (period === "pm" && hours !== 12) hours += 12;
+    if (period === "am" && hours === 12) hours = 0;
+
+    // Format as HH:MM
+    return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
+}
+
+// 📌 Function to handle user input with validation
+function handleUserInput(field, value, div, question, eventObject) {
+    if (value !== "Other") {
+        eventObject[field] = value;
+        div.innerHTML = `<p><strong>${question}</strong> ${eventObject[field]}</p>`;
+        checkAllFieldsFilled(eventObject);
+        return;
+    }
+
+    // Create an input field for custom input
+    const input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = `Enter ${field} (HH:MM AM/PM)...`;
+    input.classList.add("option-input");
+
+    input.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+            let userInput = input.value.trim();
+
+            // Ensure input is not empty
+            if (!userInput) {
+                alert(`Please enter a valid ${field}.`);
+                return;
+            }
+
+            // Validate time format and infer AM/PM if needed
+            let referenceTime = field === "startTime" ? eventObject.endTime : eventObject.startTime;
+            let validTime = validateAndFormatTime(userInput, field === "endTime", referenceTime);
+
+            if (!validTime) {
+                alert("Invalid time format. Please enter time in HH:MM AM/PM.");
+                return;
+            }
+
+            eventObject[field] = validTime;
+            div.innerHTML = `<p><strong>${question}</strong> ${eventObject[field]}</p>`;
+            checkAllFieldsFilled(eventObject);
+        }
+    });
+
+    div.replaceChildren(input);
+    input.focus();
+}
+
+
+
+
+// 📌 Function to display MCQs and enforce correct input format
 function displayMCQs(mcqs, eventObject) {
     const eventDetailsDiv = document.getElementById("eventDetails");
     eventDetailsDiv.innerHTML = "<h3>Fill Missing Event Details:</h3>";
@@ -172,41 +332,24 @@ function displayMCQs(mcqs, eventObject) {
             const button = document.createElement("button");
             button.innerText = option;
             button.classList.add("option-button");
-            button.onclick = () => {
-                if (option === "Other") {
-                    // Replace button with an input field
-                    const input = document.createElement("input");
-                    input.type = "text";
-                    input.placeholder = `Enter ${mcq.field}...`;
-                    input.classList.add("option-input");
-
-                    // When user presses Enter or clicks away
-                    input.addEventListener("blur", () => {
-                        eventObject[mcq.field] = input.value.trim() || "Not provided";
-                        div.innerHTML = `<p><strong>${mcq.question}</strong> ${eventObject[mcq.field]}</p>`;
-                        checkAllFieldsFilled(eventObject);
-                    });
-
-                    input.addEventListener("keypress", (e) => {
-                        if (e.key === "Enter") {
-                            input.blur(); // Save input and exit field
-                        }
-                    });
-
-                    div.replaceChild(input, button);
-                    input.focus();
-                } else {
-                    eventObject[mcq.field] = option;
-                    div.innerHTML = `<p><strong>${mcq.question}</strong> ${eventObject[mcq.field]}</p>`;
-                    checkAllFieldsFilled(eventObject);
-                }
-            };
+            button.onclick = () => handleUserInput(mcq.field, option, div, mcq.question, eventObject);
             div.appendChild(button);
         });
+
+        // Ensure "Other" option is always available
+        if (!mcq.options.includes("Other")) {
+            const otherButton = document.createElement("button");
+            otherButton.innerText = "Other";
+            otherButton.classList.add("option-button");
+            otherButton.onclick = () => handleUserInput(mcq.field, "Other", div, mcq.question, eventObject);
+            div.appendChild(otherButton);
+        }
 
         eventDetailsDiv.appendChild(div);
     });
 }
+
+
 
 // 📌 Function to check if all fields are filled
 function checkAllFieldsFilled(eventObject) {
