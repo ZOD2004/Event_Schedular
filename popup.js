@@ -1,85 +1,73 @@
 const GEMINI_API_KEY = "AIzaSyDwVpvo9dl847OtQbHu_ZEfk_wDLuLOBXA"; 
 
 
-
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
     console.log("Popup.js loaded");
 
-    chrome.storage.local.get("selectedText", (data) => {
+    chrome.storage.local.get("selectedText", async (data) => {
         console.log("Selected text:", data.selectedText);
+
         const eventDetailsDiv = document.getElementById("eventDetails");
 
         if (data.selectedText) {
             eventDetailsDiv.innerText = "Fetching event details...";
 
-            fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    contents: [{
-                        parts: [{
-                            text: `Extract event details from this text:
-                            """${data.selectedText}"""
-                            Return ONLY valid JSON with these keys: 
-                            {"title": "...", "startTime": "...", "endTime": "...", "location": "...", "description": "..."}`
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{
+                                text: `Extract event details from this text:
+                                """${data.selectedText}"""
+                                Return ONLY valid JSON with these keys: 
+                                {"title": "...", "startTime": "...", "endTime": "...", "location": "...", "description": "..."}`
+                            }]
                         }]
-                    }]
-                })
-            })
-            .then(response => response.json())
-            .then(result => {
+                    })
+                });
+
+                const result = await response.json();
                 console.log("Gemini API Response:", result);
-                let extractedText = result.candidates[0]?.content.parts[0]?.text.trim() || "";
-                extractedText = extractedText.replace(/```json|```/g, "").trim();
-                
-                try {
-                    const eventObject = JSON.parse(extractedText);
-                    console.log("Parsed Event Object:", eventObject);
 
-                    let missingFields = [];
-                    ["title", "startTime", "endTime", "location", "description"].forEach(field => {
-                        if (!eventObject[field] || eventObject[field].trim() === "") {
-                            missingFields.push(field);
-                        }
-                    });
-
-                    if (missingFields.length > 0) {
-                        askMissingDetails(missingFields, eventObject);
-                    } else {
-                        displayEventDetails(eventObject);
-                    }
-                } catch (e) {
-                    eventDetailsDiv.innerText = "Error parsing event details. Invalid JSON format.";
-                    console.error("Parsing error:", e, "Extracted Text:", extractedText);
+                if (!result || !result.candidates || result.candidates.length === 0) {
+                    throw new Error("No event details extracted.");
                 }
-            })
-            .catch(error => {
-                console.error("Error fetching Gemini API:", error);
+
+                let extractedText = result.candidates[0].content.parts[0].text.trim();
+                extractedText = extractedText.replace(/```json|```/g, "").trim(); // Remove formatting
+                let eventObject = JSON.parse(extractedText);
+
+                console.log("Parsed Event Object:", eventObject);
+
+                const missingFields = [];
+                for (const key of ["title", "startTime", "endTime", "location", "description"]) {
+                    if (!eventObject[key]) {
+                        missingFields.push(key);
+                    }
+                }
+
+                if (missingFields.length > 0) {
+                    const mcqs = await askMissingDetails(missingFields);
+                    displayMCQs(mcqs, eventObject);
+                } else {
+                    displayEventDetails(eventObject);
+                }
+
+            } catch (error) {
+                console.error("Error fetching event details:", error);
                 eventDetailsDiv.innerText = "Error fetching event details.";
-            });
+            }
         } else {
             eventDetailsDiv.innerText = "No event details found.";
         }
     });
 });
 
+// 🛠 Function to fetch MCQs for missing details
 async function askMissingDetails(missingFields) {
-    console.log("Asking for missing details:", missingFields);
-
-    const promptText = `
-        Some event details are missing. Ask relevant multiple-choice questions to fill in the gaps. 
-        Provide at most 4 options per question, including an 'Other' option.
-        Missing fields: ${missingFields.join(", ")}
-        
-        Format the response as:
-        [
-            {
-                "question": "What is the event title?",
-                "options": ["Option 1", "Option 2", "Option 3", "Other"]
-            },
-            ...
-        ]
-    `;
+    console.log("Fetching MCQs for missing fields:", missingFields);
 
     try {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
@@ -88,58 +76,83 @@ async function askMissingDetails(missingFields) {
             body: JSON.stringify({
                 contents: [{
                     parts: [{
-                        text: promptText
+                        text: `Generate multiple-choice questions (MCQs) to fill missing event details.
+                        The missing fields are: ${missingFields.join(", ")}
+                        Return ONLY valid JSON in this format:
+                        [
+                            {
+                                "field": "startTime",
+                                "question": "What is the start time?",
+                                "options": ["6 PM", "7 PM", "8 PM", "Other"]
+                            },
+                            {
+                                "field": "location",
+                                "question": "Where is the event?",
+                                "options": ["Community Hall", "Grand Hotel", "Park", "Other"]
+                            }
+                        ]`
                     }]
                 }]
             })
         });
 
-        if (!response.ok) {
-            throw new Error(`API Error: ${response.status} ${response.statusText}`);
-        }
-
         const result = await response.json();
-        console.log("Gemini API Response (Raw):", result);
+        console.log("MCQ API Response:", result);
 
         if (!result || !result.candidates || result.candidates.length === 0) {
-            throw new Error("No valid response from Gemini API.");
+            throw new Error("No MCQs generated.");
         }
 
-        let extractedText = result.candidates[0].content.parts[0].text.trim();
-        console.log("Extracted Text (Raw):", extractedText);
-        extractedText = extractedText.replace(/```json|```/g, "").trim();
+        let mcqText = result.candidates[0].content.parts[0].text.trim();
+        mcqText = mcqText.replace(/```json|```/g, "").trim(); // Remove formatting
 
-        let mcqQuestions;
-
-        try {
-            mcqQuestions = JSON.parse(extractedText);
-        } catch (e) {
-            console.warn("First JSON parse attempt failed. Trying to extract JSON manually.");
-
-            const jsonMatch = extractedText.match(/\[.*\]/s);
-            if (jsonMatch) {
-                mcqQuestions = JSON.parse(jsonMatch[0]);
-            } else {
-                throw new Error(`Parsing error: Invalid JSON format. Extracted Text: ${extractedText}`);
-            }
-        }
-
-        console.log("Parsed MCQ Questions:", mcqQuestions);
-
-        return mcqQuestions;
+        return JSON.parse(mcqText);
     } catch (error) {
         console.error("Error fetching Gemini API for MCQ:", error);
         return [];
     }
 }
 
-
+// 🖥 Function to display event details
 function displayEventDetails(eventObject) {
-    document.getElementById("eventDetails").innerHTML = `
+    const eventDetailsDiv = document.getElementById("eventDetails");
+    eventDetailsDiv.innerHTML = `
         <strong>Title:</strong> ${eventObject.title} <br>
         <strong>Start Time:</strong> ${eventObject.startTime} <br>
         <strong>End Time:</strong> ${eventObject.endTime} <br>
         <strong>Location:</strong> ${eventObject.location} <br>
         <strong>Description:</strong> ${eventObject.description}
     `;
+}
+
+// 📌 Function to display MCQs and allow user input
+function displayMCQs(mcqs, eventObject) {
+    const eventDetailsDiv = document.getElementById("eventDetails");
+    eventDetailsDiv.innerHTML = "<h3>Fill Missing Event Details:</h3>";
+
+    mcqs.forEach(mcq => {
+        const div = document.createElement("div");
+        div.innerHTML = `<p><strong>${mcq.question}</strong></p>`;
+        
+        mcq.options.forEach(option => {
+            const button = document.createElement("button");
+            button.innerText = option;
+            button.onclick = () => {
+                if (option === "Other") {
+                    const userInput = prompt(`Enter ${mcq.field}:`);
+                    eventObject[mcq.field] = userInput || "Not provided";
+                } else {
+                    eventObject[mcq.field] = option;
+                }
+                div.innerHTML = `<p><strong>${mcq.question}</strong> ${eventObject[mcq.field]}</p>`;
+
+                if (Object.values(eventObject).every(val => val)) {
+                    displayEventDetails(eventObject);
+                }
+            };
+            div.appendChild(button);
+        });
+
+        eventDetailsDiv.appendChild(div);
+    });
 }
