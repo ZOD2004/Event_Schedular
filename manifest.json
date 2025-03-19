@@ -2,14 +2,44 @@
   "manifest_version": 3,
   "name": "Event Scheduler",
   "version": "1.0",
-  "description": "Extracts event details and displays them in a popup.",
-  "permissions": ["contextMenus", "storage", "activeTab", "scripting"],
-  "host_permissions": ["https://generativelanguage.googleapis.com/*"],
+  "description": "Extracts event details and allows scheduling them in Google Calendar.",
+  "permissions": [
+    "identity",
+    "identity.email",
+    "contextMenus",
+    "notifications",
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://generativelanguage.googleapis.com/*",
+    "https://www.googleapis.com/*"
+  ],
+  "oauth2": {
+    "client_id": "304283359700-lbchbjt1kgsh8ajrke7r6hhk1horl25d.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/calendar.events"
+    ]
+  },
   "background": {
     "service_worker": "background.js"
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Schedule Event"
+    "default_title": "Schedule Event",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
   }
 }
