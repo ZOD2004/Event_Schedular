@@ -3,43 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Event Scheduler</title>
+    <title>Event Extractor</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            padding: 10px;
-            width: 350px;
+            width: 300px;
+            padding: 15px;
+            text-align: center;
         }
         h2 {
-            text-align: center;
+            font-size: 18px;
         }
         #eventDetails {
             margin-top: 10px;
             padding: 10px;
             border: 1px solid #ccc;
-            background: #f9f9f9;
-            min-height: 50px;
-        }
-        button {
-            display: block;
-            width: 100%;
-            padding: 8px;
-            margin-top: 10px;
-            background: #28a745;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
-        button:hover {
-            background: #218838;
+            background-color: #f9f9f9;
+            text-align: left;
+            font-size: 14px;
         }
     </style>
 </head>
 <body>
-    <h2>Event Details</h2>
-    <div id="eventDetails">Loading...</div>
-    <button id="addToCalendar">Add to Google Calendar</button>
-
+    <h2>Event Extractor</h2>
+    <div id="eventDetails">Fetching event details...</div>
     <script src="popup.js"></script>
 </body>
 </html>
+
+<!-- const GEMINI_API_KEY = "AIzaSyDwVpvo9dl847OtQbHu_ZEfk_wDLuLOBXA"; // Replace with your actual API key
+
+
+// curl -X POST "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=AIzaSyDwVpvo9dl847OtQbHu_ZEfk_wDLuLOBXA" -H "Content-Type: application/json" -d "{ \"contents\": [{ \"parts\": [{ \"text\": \"Test response\" }] }] }" -->
+

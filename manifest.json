@@ -2,19 +2,14 @@
   "manifest_version": 3,
   "name": "Event Scheduler",
   "version": "1.0",
-  "description": "Extracts event details from selected text and adds them to Google Calendar.",
-  "permissions": ["activeTab", "contextMenus", "storage"],
-  "host_permissions": ["https://www.googleapis.com/calendar/v3/*"],
+  "description": "Extracts event details and displays them in a popup.",
+  "permissions": ["contextMenus", "storage", "activeTab", "scripting"],
+  "host_permissions": ["https://generativelanguage.googleapis.com/*"],
   "background": {
     "service_worker": "background.js"
   },
   "action": {
-    "default_popup": "popup.html"
-  },
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"]
-    }
-  ]
+    "default_popup": "popup.html",
+    "default_title": "Schedule Event"
+  }
 }
