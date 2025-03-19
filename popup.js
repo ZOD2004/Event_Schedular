@@ -4,14 +4,17 @@ const GEMINI_API_KEY = "AIzaSyDwVpvo9dl847OtQbHu_ZEfk_wDLuLOBXA";
 document.addEventListener("DOMContentLoaded", () => {
     console.log("Popup.js loaded");
 
+    const eventDetailsDiv = document.getElementById("eventDetails");
+    const loadingDiv = document.getElementById("loading"); // Get the loader
+
+    // Show loader initially
+    loadingDiv.style.display = "block";
+    eventDetailsDiv.style.display = "none";
+
     chrome.storage.local.get("selectedText", async (data) => {
         console.log("Selected text:", data.selectedText);
 
-        const eventDetailsDiv = document.getElementById("eventDetails");
-
         if (data.selectedText) {
-            eventDetailsDiv.innerText = "Fetching event details...";
-
             try {
                 const extractedText = await fetchEventDetails(data.selectedText);
                 if (!extractedText) throw new Error("No event details extracted.");
@@ -22,6 +25,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 // Find missing fields
                 let missingFields = Object.keys(eventObject).filter(key => !eventObject[key]);
 
+                // Hide loader when data is ready
+                loadingDiv.style.display = "none";
+                eventDetailsDiv.style.display = "block";
+
                 if (missingFields.length > 0) {
                     const mcqs = await askMissingDetails(missingFields);
                     displayMCQs(mcqs, eventObject);
@@ -31,13 +38,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
             } catch (error) {
                 console.error("Error:", error);
+                loadingDiv.style.display = "none";
+                eventDetailsDiv.style.display = "block";
                 eventDetailsDiv.innerText = "Error fetching event details.";
             }
         } else {
+            loadingDiv.style.display = "none";
+            eventDetailsDiv.style.display = "block";
             eventDetailsDiv.innerText = "No event details found.";
         }
     });
 });
+
 
 // 📌 Function to fetch event details using Gemini API
 async function fetchEventDetails(selectedText) {
