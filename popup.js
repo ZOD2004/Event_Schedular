@@ -1,10 +1,51 @@
-const GEMINI_API_KEY = "AIzaSyDwVpvo9dl847OtQbHu_ZEfk_wDLuLOBXA"; 
-
 let eventObject;
 
+async function checkApiKey() {
+    return new Promise((resolve) => {
+        chrome.storage.local.get("geminiApiKey", (data) => {
+            resolve(data.geminiApiKey || null);
+        });
+    });
+}
 
+function promptForApiKey() {
+    const eventDetailsDiv = document.getElementById("eventDetails");
+    const loadingDiv = document.getElementById("loading");
+    
+    loadingDiv.style.display = "none";
+    
+    eventDetailsDiv.innerHTML = `
+        <div class="api-key-form">
+            <h3>API Key Required</h3>
+            <p>Please enter your Gemini API key to continue:</p>
+            <input type="text" id="apiKeyInput" placeholder="Enter your Gemini API key" class="api-key-input">
+            <p class="api-key-info">You can get an API key from <a href="https://ai.google.dev/" target="_blank">Google AI Developer Platform</a></p>
+            <button id="saveApiKeyBtn" class="primary-button">Save Key</button>
+        </div>
+    `;
+    
+    eventDetailsDiv.style.display = "block";
+    
+    // Add event listener after the element is in the DOM
+    setTimeout(() => {
+        const saveButton = document.getElementById("saveApiKeyBtn");
+        if (saveButton) {
+            saveButton.addEventListener("click", () => {
+                const apiKey = document.getElementById("apiKeyInput").value.trim();
+                if (apiKey) {
+                    chrome.storage.local.set({ "geminiApiKey": apiKey }, () => {
+                        console.log("API key saved");
+                        location.reload(); // Reload to continue with the saved API key
+                    });
+                } else {
+                    alert("Please enter a valid API key");
+                }
+            });
+        }
+    }, 100);
+}
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
     console.log("Popup.js loaded");
 
     const eventDetailsDiv = document.getElementById("eventDetails");
@@ -14,21 +55,30 @@ document.addEventListener("DOMContentLoaded", () => {
     loadingDiv.style.display = "block";
     eventDetailsDiv.style.display = "none";
 
-    // Initialize Add to Calendar button
-    addToCalendarBtn.addEventListener("click", async () => {
-        if (eventObject) {
-            console.log("Adding to calendar:", eventObject);
-            try {
-                await createCalendarEvent(eventObject);
-            } catch (error) {
-                console.error("Error adding event to calendar:", error);
-                showNotification("Error", "Failed to add event to calendar. Please try again.");
+    // Fix: Added await to properly check the API key
+    const apiKey = await checkApiKey();
+    if (!apiKey) {
+        promptForApiKey();
+        return;
+    }
+
+    // Initialize Add to Calendar button - using a single listener
+    if (addToCalendarBtn) {
+        addToCalendarBtn.addEventListener("click", async () => {
+            if (eventObject) {
+                console.log("Adding to calendar:", eventObject);
+                try {
+                    await createCalendarEvent(eventObject);
+                } catch (error) {
+                    console.error("Error adding event to calendar:", error);
+                    showNotification("Error", "Failed to add event to calendar. Please try again.");
+                }
+            } else {
+                console.error("Event object is not defined.");
+                alert("No event details found. Please extract event details first.");
             }
-        } else {
-            console.error("Event object is not defined.");
-            alert("No event details found. Please extract event details first.");
-        }
-    });
+        });
+    }
 
     // Process selected text
     chrome.storage.local.get("selectedText", async (data) => {
@@ -41,6 +91,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 eventObject = parseEventDetails(extractedText);
                 console.log("Parsed Event Object:", eventObject);
+                
+                // Validate event object data
+                validateEventObject(eventObject);
+                
                 let missingFields = Object.keys(eventObject).filter(key => !eventObject[key]);
 
                 loadingDiv.style.display = "none";
@@ -57,12 +111,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 console.error("Error:", error);
                 loadingDiv.style.display = "none";
                 eventDetailsDiv.style.display = "block";
-                eventDetailsDiv.innerText = "Error fetching event details.";
+                eventDetailsDiv.innerHTML = `<p>Error fetching event details: ${error.message}</p>`;
             }
         } else {
             loadingDiv.style.display = "none";
             eventDetailsDiv.style.display = "block";
-            eventDetailsDiv.innerText = "No event details found.";
+            eventDetailsDiv.innerHTML = "<p>No event details found.</p>";
         }
     });
 
@@ -75,13 +129,130 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
     setTimeout(resizePopup, 100);
+    addApiKeyManagementUI();
 });
 
+// Function to validate event object data
+function validateEventObject(eventObj) {
+    // Validate date format (YYYY-MM-DD)
+    if (eventObj.date) {
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(eventObj.date)) {
+            eventObj.date = formatDate(eventObj.date);
+        }
+    }
+    
+    // Validate time formats (HH:MM)
+    if (eventObj.startTime) {
+        const timeRegex = /^\d{2}:\d{2}$/;
+        if (!timeRegex.test(eventObj.startTime)) {
+            eventObj.startTime = formatTime(eventObj.startTime);
+        }
+    }
+    
+    if (eventObj.endTime) {
+        const timeRegex = /^\d{2}:\d{2}$/;
+        if (!timeRegex.test(eventObj.endTime)) {
+            eventObj.endTime = formatTime(eventObj.endTime);
+        }
+    }
+    
+    return eventObj;
+}
 
+// Helper function to format date
+function formatDate(dateStr) {
+    try {
+        // Try to parse the date string
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) {
+            // If invalid, return today's date
+            const today = new Date();
+            return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        }
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    } catch (e) {
+        // On error, return today's date
+        const today = new Date();
+        return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    }
+}
 
-// to show error
+// Helper function to format time
+function formatTime(timeStr) {
+    const timeRegex = /(\d{1,2}):?(\d{2})?\s*(am|pm)?/i;
+    const match = timeStr.match(timeRegex);
+    
+    if (!match) return "12:00"; // Default time
+    
+    let hours = parseInt(match[1], 10);
+    let minutes = match[2] ? parseInt(match[2], 10) : 0;
+    let period = match[3] ? match[3].toLowerCase() : null;
+    
+    // Convert to 24-hour format if AM/PM is specified
+    if (period === "pm" && hours < 12) hours += 12;
+    if (period === "am" && hours === 12) hours = 0;
+    
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+function addApiKeyManagementUI() {
+    const apiKeySettingsBtn = document.createElement("button");
+    apiKeySettingsBtn.id = "apiKeySettingsBtn";
+    apiKeySettingsBtn.innerText = "⚙️ API Settings";
+    apiKeySettingsBtn.classList.add("settings-button");
+    apiKeySettingsBtn.addEventListener("click", async () => {
+        const apiKey = await checkApiKey();
+        
+        const settingsDiv = document.getElementById("eventDetails");
+        if (!settingsDiv) return;
+        
+        settingsDiv.innerHTML = `
+            <div class="api-key-form">
+                <h3>API Key Settings</h3>
+                <input type="text" id="apiKeyInput" placeholder="Enter your Gemini API key" class="api-key-input" value="${apiKey || ''}">
+                <p class="api-key-info">You can get an API key from <a href="https://ai.google.dev/" target="_blank">Google AI Developer Platform</a></p>
+                <div class="button-row">
+                    <button id="saveApiKeyBtn" class="primary-button">Save Key</button>
+                    <button id="backBtn" class="secondary-button">Back</button>
+                </div>
+            </div>
+        `;
+        
+        // Add event listeners after the elements are in the DOM
+        setTimeout(() => {
+            const saveBtn = document.getElementById("saveApiKeyBtn");
+            const backBtn = document.getElementById("backBtn");
+            
+            if (saveBtn) {
+                saveBtn.addEventListener("click", () => {
+                    const newApiKey = document.getElementById("apiKeyInput").value.trim();
+                    if (newApiKey) {
+                        chrome.storage.local.set({ "geminiApiKey": newApiKey }, () => {
+                            console.log("API key saved");
+                            location.reload();
+                        });
+                    } else {
+                        alert("Please enter a valid API key");
+                    }
+                });
+            }
+            
+            if (backBtn) {
+                backBtn.addEventListener("click", () => {
+                    location.reload();
+                });
+            }
+        }, 100);
+    });
+    
+    document.body.appendChild(apiKeySettingsBtn);
+}
+
 function showError(message) {
     const eventDetailsDiv = document.getElementById("eventDetails");
+    if (!eventDetailsDiv) return;
+    
     eventDetailsDiv.innerHTML = `
         <div class="error-message">
             <p>${message}</p>
@@ -89,18 +260,32 @@ function showError(message) {
         </div>
     `;
     
-    document.getElementById("retryButton").addEventListener("click", () => {
-        location.reload();
-    });
+    // Add event listener after the element is in the DOM
+    setTimeout(() => {
+        const retryBtn = document.getElementById("retryButton");
+        if (retryBtn) {
+            retryBtn.addEventListener("click", () => {
+                location.reload();
+            });
+        }
+    }, 100);
     
     eventDetailsDiv.style.display = "block";
-    document.getElementById("loading").style.display = "none";
+    
+    const loadingDiv = document.getElementById("loading");
+    if (loadingDiv) {
+        loadingDiv.style.display = "none";
+    }
 }
 
-// 📌 Function to fetch event details using Gemini API
 async function fetchEventDetails(selectedText) {
     try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+        const apiKey = await checkApiKey();
+        if (!apiKey) {
+            throw new Error("No API key found");
+        }
+        
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -140,15 +325,14 @@ async function fetchEventDetails(selectedText) {
         return result.candidates[0].content.parts[0].text.trim();
     } catch (error) {
         console.error("Error fetching Gemini API:", error);
-        return null;
+        throw error;
     }
 }
 
-// 📌 Function to parse event details using regex
 function parseEventDetails(text) {
     const extractValue = (regex) => {
         const match = text.match(regex);
-        return match ? match[1] : "";
+        return match ? match[1].trim() : "";
     };
 
     let startTime = extractValue(/Start Time:\s*(\d{2}:\d{2})/);
@@ -157,16 +341,15 @@ function parseEventDetails(text) {
     endTime = (endTime === "00:00") ? "" : endTime;
 
     return {
-        title: extractValue(/Title:\s*(.*)/),
+        title: extractValue(/Title:\s*(.*?)(?=\n|$)/),
         date: extractValue(/Date:\s*(\d{4}-\d{2}-\d{2})/),
         startTime: startTime,
         endTime: endTime,
-        location: extractValue(/Location:\s*(.*)/),
-        description: extractValue(/Description:\s*(.*)/)
+        location: extractValue(/Location:\s*(.*?)(?=\n|$)/),
+        description: extractValue(/Description:\s*(.*)(?=\n|$)/)
     };
 }
 
-// 📌 Function to ask missing details via MCQs
 async function askMissingDetails(missingFields) {
     console.log("Fetching MCQs for missing fields:", missingFields);
 
@@ -178,7 +361,12 @@ async function askMissingDetails(missingFields) {
     });
 
     try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+        const apiKey = await checkApiKey();
+        if (!apiKey) {
+            throw new Error("No API key found");
+        }
+        
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -229,7 +417,6 @@ async function askMissingDetails(missingFields) {
     }
 }
 
-// 📌 Function to validate and format time input
 function validateAndFormatTime(input, isEndTime, otherTime) {
     input = input.trim().toLowerCase();
 
@@ -260,11 +447,13 @@ function validateAndFormatTime(input, isEndTime, otherTime) {
     return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
 }
 
-// 📌 Function to handle user input with validation
 function handleUserInput(field, value, div, question, eventObject) {
+    // Store references to elements that will be modified
+    const currentDiv = div;
+    
     if (value !== "Other") {
         eventObject[field] = value;
-        div.innerHTML = `<p><strong>${question}</strong> ${eventObject[field]}</p>`;
+        currentDiv.innerHTML = `<p><strong>${question}</strong> ${eventObject[field]}</p>`;
         checkAllFieldsFilled(eventObject);
         return;
     }
@@ -274,12 +463,7 @@ function handleUserInput(field, value, div, question, eventObject) {
     input.placeholder = `Enter ${field}...`;
     input.classList.add("option-input");
 
-    // Add event listeners for both blur and enter key
-    input.addEventListener("blur", () => processInputValue());
-    input.addEventListener("keypress", (e) => {
-        if (e.key === "Enter") processInputValue();
-    });
-
+    // Create a local function to handle input processing
     function processInputValue() {
         let userInput = input.value.trim();
         
@@ -303,17 +487,44 @@ function handleUserInput(field, value, div, question, eventObject) {
             eventObject[field] = userInput;
         }
 
-        div.innerHTML = `<p><strong>${question}</strong> ${eventObject[field]}</p>`;
-        checkAllFieldsFilled(eventObject);
+        // Check if the element still exists in the DOM before updating
+        if (currentDiv && currentDiv.isConnected) {
+            currentDiv.innerHTML = `<p><strong>${question}</strong> ${eventObject[field]}</p>`;
+            checkAllFieldsFilled(eventObject);
+        }
     }
 
-    div.replaceChildren(input);
+    // Handle blur event with a cleanup mechanism
+    input.addEventListener("blur", () => {
+        // Use setTimeout to allow other events to process first
+        setTimeout(() => {
+            if (input && input.isConnected) {
+                processInputValue();
+            }
+        }, 100);
+    });
+    
+    // Handle enter key press
+    input.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            processInputValue();
+        }
+    });
+
+    // Remove all children and add the input
+    while (currentDiv.firstChild) {
+        currentDiv.removeChild(currentDiv.firstChild);
+    }
+    
+    currentDiv.appendChild(input);
     input.focus();
 }
 
-// 📌 Function to display MCQs
 function displayMCQs(mcqs, eventObject) {
     const eventDetailsDiv = document.getElementById("eventDetails");
+    if (!eventDetailsDiv) return;
+    
     eventDetailsDiv.innerHTML = "<h3>Fill Missing Event Details:</h3>";
 
     mcqs.forEach(mcq => {
@@ -340,46 +551,36 @@ function displayMCQs(mcqs, eventObject) {
     });
 }
 
-
-// 📌 Function to check if all fields are filled
 function checkAllFieldsFilled(eventObject) {
+    // Add validation before checking
+    validateEventObject(eventObject);
+    
     if (Object.values(eventObject).every(val => val)) {
         displayEventDetails(eventObject);
     }
 }
 
-// 📌 Function to display final event details
 function displayEventDetails(eventObject) {
     const eventDetailsDiv = document.getElementById("eventDetails");
+    if (!eventDetailsDiv) return;
+    
     eventDetailsDiv.innerHTML = `
         <h3>Event Details:</h3>
-        <p><strong>Title:</strong> ${eventObject.title}</p>
+        <p><strong>Title:</strong> ${eventObject.title || "Untitled Event"}</p>
         <p><strong>Date:</strong> ${eventObject.date}</p>
-        <p><strong>Start Time:</strong> ${eventObject.startTime}</p>
-        <p><strong>End Time:</strong> ${eventObject.endTime}</p>
-        <p><strong>Location:</strong> ${eventObject.location}</p>
-        <p><strong>Description:</strong> ${eventObject.description}</p>
+        <p><strong>Start Time:</strong> ${eventObject.startTime || "Not specified"}</p>
+        <p><strong>End Time:</strong> ${eventObject.endTime || "Not specified"}</p>
+        <p><strong>Location:</strong> ${eventObject.location || "Not specified"}</p>
+        <p><strong>Description:</strong> ${eventObject.description || "No description"}</p>
     `;
-    addToCalendarBtn.style.display = "block";
-
-    // Re-attach event listener for the newly created button
-    document.getElementById("addToCalendarBtn").addEventListener("click", async () => {
-        if (eventObject) {
-            console.log("Adding to calendar:", eventObject);
-            try {
-                await createCalendarEvent(eventObject);
-            } catch (error) {
-                console.error("Error adding event to calendar:", error);
-                showNotification("Error", "Failed to add event to calendar. Please try again.");
-            }
-        } else {
-            console.error("Event object is not defined.");
-            alert("No event details found. Please extract event details first.");
-        }
-    });
+    
+    // Show the button only if it exists
+    const addToCalendarBtn = document.getElementById("addToCalendarBtn");
+    if (addToCalendarBtn) {
+        addToCalendarBtn.style.display = "block";
+    }
 }
 
-// 📌 Function to fetch authentication token
 async function getAuthToken() {
     return new Promise((resolve, reject) => {
         chrome.identity.getAuthToken({ interactive: true }, (token) => {
@@ -394,24 +595,47 @@ async function getAuthToken() {
     });
 }
 
-// 📌 Function to format dates to ISO format
 function formatToISO(date, time) {
-    return time ? `${date}T${time}:00+05:30` : `${date}T00:00:00+05:30`; // Default to midnight if no time
+    // Validate date format
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        date = formatDate(date);
+    }
+    
+    // Validate time format
+    if (time && !/^\d{2}:\d{2}$/.test(time)) {
+        time = formatTime(time);
+    }
+    
+    return time ? `${date}T${time}:00+05:30` : `${date}T00:00:00+05:30`;
 }
 
-// 📌 Function to create a Google Calendar event
 async function createCalendarEvent(event) {
     try {
+        // Add validation for all fields before creating an event
+        validateEventObject(event);
+        
         let token = await getAuthToken();
+
+        // Ensure we have a title
+        if (!event.title) {
+            event.title = "Untitled Event";
+        }
+        
+        // Ensure we have a valid date
+        if (!event.date || !/^\d{4}-\d{2}-\d{2}$/.test(event.date)) {
+            event.date = formatDate(event.date);
+        }
 
         // Fallback to all-day event if no times provided
         const useDateTime = event.startTime && event.endTime;
         
         let eventData = {
-            summary: event.title || "Untitled Event",
+            summary: event.title,
             location: event.location || "",
             description: event.description ? event.description.replace(/\.\s+/g, ".\n") : "",
         };
+        
+        console.log("Creating event with data (before formatting):", eventData);
         
         // Handle both timed events and all-day events
         if (useDateTime) {
@@ -432,7 +656,7 @@ async function createCalendarEvent(event) {
             };
         }
 
-        console.log("Creating event with data:", eventData);
+        console.log("Creating event with data (after formatting):", eventData);
 
         let response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
             method: 'POST',
@@ -444,6 +668,8 @@ async function createCalendarEvent(event) {
         });
 
         let data = await response.json();
+        console.log("API Response:", data);
+        
         if (response.ok) {
             console.log("Event Created:", data);
             showNotification("Success", "Event Added to Google Calendar!");
@@ -456,7 +682,9 @@ async function createCalendarEvent(event) {
             return data;
         } else {
             console.error("Error Creating Event:", data);
-            throw new Error("Failed to add event: " + (data.error ? data.error.message : "Unknown error"));
+            let errorMessage = data.error ? data.error.message : "Unknown error";
+            showNotification("Error", "Failed to add event: " + errorMessage);
+            throw new Error("Failed to add event: " + errorMessage);
         }
     } catch (error) {
         console.error("Calendar API Error:", error);
@@ -465,7 +693,6 @@ async function createCalendarEvent(event) {
     }
 }
 
-// 📌 Function to show Chrome notifications
 function showNotification(title, message) {
     chrome.notifications.create({
         type: "basic",
