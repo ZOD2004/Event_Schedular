@@ -16,10 +16,10 @@
     "https://generativelanguage.googleapis.com/*",
     "https://www.googleapis.com/*"
   ],
-  "oauth2": {
-    "client_id": "304283359700-lbchbjt1kgsh8ajrke7r6hhk1horl25d.apps.googleusercontent.com",
+  "oauth2": { // add your id and scope
+    "client_id": "",
     "scopes": [
-      "https://www.googleapis.com/auth/calendar.events"
+      "https:""
     ]
   },
   "background": {
