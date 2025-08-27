@@ -1,5 +1,5 @@
 // Remove the hard-coded API key
-// const GEMINI_API_KEY = "AIzaSyDwVpvo9dl847OtQbHu_ZEfk_wDLuLOBXA"; 
+// const GEMINI_API_KEY = ""; 
 
 let eventObject;
 
